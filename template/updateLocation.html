@@ -1,0 +1,37 @@
+{% extends 'base.html'%}
+  
+
+{% block head %}
+<title>
+    Inventory Management System
+   </title>
+{% endblock %}
+
+
+{% block body %}
+
+
+<div class="container">
+    <h1 class="headerStyle">Location Update </h1>
+  
+     <form class="form-inline" action="/updatelocation/{{task.location_id}}" method="POST">
+        <div class="form-group">
+          <input class="form-control" type="text" name="location" value="{{task.location}}">
+        </div>
+        
+        <div class="form-group">
+           <input type="submit" class="btn btn-success" value="Update"> 
+        </div>
+     </form>
+
+
+  </div>
+
+  <div class="container">
+       
+   <h4 style="color: red; font-family: sans-serif"> <b>{{msg}}</b>
+   </h4>
+
+  </div>
+
+{% endblock %}

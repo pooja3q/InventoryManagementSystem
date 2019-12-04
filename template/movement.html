@@ -1,0 +1,155 @@
+{% extends 'base.html'%}
+  
+
+{% block head %}
+<title>
+    Inventory Management System
+   </title>
+
+   <script>
+
+
+$(document).ready(function(){
+    
+    $('#submitBtn').click(function(){
+    console.log("inside the function");
+        
+       var p=  $("#product :selected").val(); 
+       var from_loc=  $("#from_loc :selected").val(); 
+       var to_loc=  $("#to_loc :selected").val(); 
+       var q= $("#quantity").val()
+       
+       if(p!= '' && q!=  '' && (to_loc != '' || from_loc != '' ) ){
+         
+           return true;
+       }
+       else{
+        document.getElementById('alertmsg').innerHTML ="select the required field."
+           return false;
+       }
+  })
+
+
+});
+
+
+        </script>
+{% endblock %}
+
+
+{% block body %}
+
+
+<div class="container">
+    <h1 class="headerStyle">Movement Details</h1>
+    {% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class=flashes>
+    {% for message in messages %}
+      <li>{{ message }}</li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+    
+    {% if logSummary == None or logSummary|length == 0 %}
+            <h3  class="font-weight-light headerStyle">Summary not available yet</h3>
+        {% else %}
+            <table class="table" id="summary">
+                <thead>
+                <tr>
+                    <th scope="col">Product</th>
+                    <th scope="col">Warehouse</th>
+                    <th scope="col">Quantity</th>
+                </tr>
+                </thead>
+                <tbody>
+                <!-- Showing current state (just as index.html -->
+                    {% for data in logSummary %}
+                        {% if data[2] != 0 %}
+                        <tr>
+                            <td>{{ data[0] }}</td>
+                            <td>{{ data[1] }}</td>
+                            <td>{{ data[2] }}</td>
+                        </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+   
+
+
+     <form name="myForm" class="form-inline MovementForm" action="/management" method="POST" >
+        <div class="form-group">
+            <select id ="product" class="form-control" name="product" width="2000px" placeholder="Select the product" required>
+                <option value="" selected> Select </option>
+                {% for prod in product %}
+                    <option value="{{ prod[1] }}" id="prod_{{ prod[0] }}">{{ prod[1] }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <select id ="from_loc"class="form-control" name="from_loc" width="300px" placeholder="From Warehouse">
+                    <option value="" selected> From Warehouse </option>
+                {% for loc in locations %}
+                    <option value="{{ loc[1] }}" id="prod_{{ loc[0] }}">{{ loc[1] }}</option>
+                {% endfor %}
+            </select>         
+         </div>
+         <div class="form-group">
+            <select  id ="to_loc" class="form-control" name="to_loc" width="300px" placeholder="To Warehouse">
+                    <option value="" selected> To Warehouse </option>
+                {% for loc in locations %}
+                    <option value="{{ loc[1] }}" id="prod_{{ loc[0] }}">{{ loc[1] }}</option>
+                {% endfor %}
+            </select>         
+         </div>
+         <div class="form-group">
+            <input id="quantity" type="number" name="quantity" placeholder="Quantity" class="form-control" required>     
+         </div>
+        <div class="form-group">
+           <input type="submit" class="btn btn-success submitBtn" value="Add" id="submitBtn"> 
+        </div>
+     </form>
+     <div class="" id="alertmsg" style="color:red">
+           
+     </div>
+
+   <h3 class="headerStyle" >Movement History</h3>
+   {% if mapping_summary == None or mapping_summary|length == 0 %}
+   <h3  class="font-weight-light headerStyle">History not available yet</h3>
+   {% else %}
+       <table class="table" id="summary">
+           <thead>
+           <tr>
+               <th scope="col">TransactionId</th>
+               <th scope="col">Product Id </th>
+               <th scope="col">Product Quantity</th>
+               <th scope="col">From Warehouse </th>
+               <th scope="col">TO Warehouse </th>
+               <th scope="col">Time </th>
+
+
+           </tr>
+           </thead>
+           <tbody>
+           <!-- Showing current state (just as index.html -->
+               {% for data in mapping_summary %}
+                   
+                   <tr>
+                       <td>{{ data[0] }}</td>
+                       <td>{{ data[2] }}</td>
+                       <td>{{ data[1] }}</td>
+                       <td>{{ data[3] }}</td>
+                       <td>{{ data[4] }}</td>
+                       <td>{{ data[5] }}</td>
+
+                   </tr>
+                  
+               {% endfor %}
+           </tbody>
+       </table>
+   {% endif  %}
+  </div>
+{% endblock %}

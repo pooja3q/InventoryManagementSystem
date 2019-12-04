@@ -1,0 +1,14 @@
+body{
+
+    margin: 0;
+    font-family: sans-serif;
+}
+
+.navbar{
+    
+    border-radius:0 !important;
+}
+.headerStyle{
+    text-align: center;
+    margin: 30px;
+}

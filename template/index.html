@@ -1,0 +1,73 @@
+{% extends 'base.html'%}
+  
+
+{% block head %}
+<title>
+    Inventory Management System
+   </title>
+{% endblock %}
+
+
+{% block body %}
+
+
+<div class="container">
+    <h1 class="headerStyle" >Product Details</h1>
+
+     
+  
+    {% if tasks|length < 1 %}
+  
+      <h4 class="headerStyle">There is no product. Add one below! </h4>
+  
+    {% else %}
+     <table class="table table-striped table-bordered">
+       <tr>
+          <th>
+              Product Id
+            </th>
+               
+            <th>
+              Product Name
+            </th>
+            <th>
+                Quantity
+              </th>
+            <th>
+              Action
+            </th>
+  
+       </tr>
+   
+       {% for task in tasks %}
+       <tr>
+         <th>
+           {{task.product_id}}</th>
+         <th>{{task.product_name}}</th>
+         <th>{{task.Quantity}}</th>
+         <th>
+           <a href="/product/delprod/{{task.product_id}}"> Delete </a>
+            <br>
+           <a href="/product/updateprod/{{task.product_id}}"> Update </a>
+         </th>
+       </tr>
+       {% endfor %} 
+     </table>
+  {% endif %}
+     <form class="form-inline" action="/product" method="POST">
+        <div class="form-group">
+          <input class="form-control" type="text" name="productname">
+        </div>
+        <div class="form-group">
+            <input class="form-control" type="number" name="quant">
+          </div>
+        <div class="form-group">
+           <input type="submit" class="btn btn-success" value="Add"> 
+        </div>
+     </form>
+     
+       <h2> {{msg}}</h2>  
+  
+
+  </div>
+{% endblock %}
