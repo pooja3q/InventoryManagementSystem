@@ -7,9 +7,9 @@
   - [Installation](#installation)
   - [Overview](#overview)
   - [Usage](#usage)
-        - [Inserting products and locations](#adding-products-and-locations)
-        - [Moving things around](#moving-things-around)
-        - [Editing Existing Data](#editing-existing-information)
+     - [Inserting products and locations](#adding-products-and-locations)
+     - [Moving things around](#moving-things-around)
+     - [Editing Existing Data](#editing-existing-information)
   - [Reference](#Reference)
 
 ## Requirements
@@ -60,6 +60,7 @@ Adding locations needs only the name to be added
 Products can be moved into and between warehouses only after they have been added to the system
 
 Product is being moved to warehouse.
+
 ![](util/3.gif)
 
 
