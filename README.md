@@ -7,9 +7,9 @@
   - [Installation](#installation)
   - [Overview](#overview)
   - [Usage](#usage)
-        - [Inserting products and locations](#adding-products-and-locations)
-        - [Moving things around](#moving-things-around)
-        - [Editing Existing Data](#editing-existing-information)
+     - [Inserting products and locations](#adding-products-and-locations)
+     - [Moving things around](#moving-things-around)
+     - [Editing Existing Data](#editing-existing-information)
   - [Reference](#Reference)
 
 ## Requirements
@@ -41,23 +41,43 @@ The landing page covers all the product and location details along with the coun
 On Product page, Add/Edit/View operation on product can be performed .Similarly on Location page. On movement page a product can be moved from or to, to any location/warehouse, its also show the transaction of each movement along with the details of product present in locations/warhouse. 
 
 ## Usage
+Initially, system will look like this
+
+![](util/1.gif)
+
+
 ### Inserting products and locations
 To add products, only the name and quantity are required
+
+![](util/2.gif)
+
 Adding locations needs only the name to be added
-![](util/1.gif)
+
+![](util/21.gif)
+
 
 ### Moving things around
 Products can be moved into and between warehouses only after they have been added to the system
-![](util/2.gif)
 
+Product is being moved to warehouse.
 
-### Editing Existing Data
-Editing Product Information
 ![](util/3.gif)
 
 
-Editing Location Information
+Product is being moved from warehouse.
+
 ![](util/4.gif)
+
+### Editing Existing Data
+
+Editing Product Information
+
+![](util/5.gif)
+
+
+Editing Location Information
+
+![](util/6.gif)
 
 
 ## Reference
