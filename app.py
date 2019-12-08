@@ -8,6 +8,35 @@ app.config['SQLALCHEMY_DATABASE_URI']= 'sqlite:///test.db'
 
 db = SQLAlchemy(app)
 
+QueryDic= {
+    "temp_prod_name": "SELECT product_name FROM product WHERE product_id = ?",
+    "temp_loc_name":"SELECT location FROM location WHERE location_id = ?",
+    "product":"SELECT product_id,product_name, Quantity FROM product ORDER BY product_id",
+    "location":"SELECT location_id , location FROM location ORDER BY location",
+    "mapping":"SELECT * FROM mapping",
+    "sum_to_loc":"SELECT SUM(log.prod_quantity) FROM mapping log WHERE log.product_id = ? AND log.to_loc = ?",
+    "sum_from_loc":"SELECT SUM(log.prod_quantity)  FROM mapping log WHERE log.product_id = ? AND log.from_loc = ?",
+    "select_unallocate":"select unallocted from product where product_name = ? ",
+    "from_loc_is_none_insert":'''Insert into mapping(product_id , to_loc, prod_quantity,date_created)
+                                  SELECT product.product_id, location.location_id, ? ,? FROM product, location 
+                                  WHERE product.product_name == ? AND location.location == ?''',
+    "update_prod_from_loc_is_none":'update product set unallocted = unallocted - ? where product_name == ?',
+    "location_id":"select location_id from location where location =?",
+    "product_id":"select product_id from product where product_name =?",
+    "product_quantity":"select prod_quantity from mapping where product_id == ? AND to_loc == ? ",
+    "to_loc_is_none_insert":'''Insert into mapping(product_id , from_loc, prod_quantity,date_created )
+                            SELECT product.product_id, location.location_id, ? ,?
+                            FROM product, location 
+                            WHERE product.product_name == ? AND location.location == ? ''',
+    "update_prod_to_loc_is_none":"update product set unallocted = unallocted + ? where product_name == ?",
+    "insert_into_mapping_both_loc_not_none":"Insert into mapping(product_id, to_loc,from_loc, prod_quantity,date_created)values(?,?,?,?,?) ",
+    "update_mapping":"update mapping set prod_quantity = prod_quantity-? where product_id = ? and to_loc =? ",
+    "unallocate":"Select product_name , Quantity, unallocted from product"
+
+
+
+}
+
 class Product(db.Model):
     product_id = db.Column(db.Integer, primary_key=True)
     product_name = db.Column(db.String, nullable=False)
@@ -170,42 +199,30 @@ def managementInventory():
     mapping_summary = None
     conn = sqlite3.connect('test.db',detect_types=sqlite3.PARSE_DECLTYPES)
     cur = conn.cursor()
-    cur.execute('SELECT product_id,product_name, Quantity FROM product ORDER BY product_id')
+    cur.execute(QueryDic['product'])
     product = cur.fetchall()
-    cur.execute('SELECT location_id , location FROM location ORDER BY location')
+    cur.execute(QueryDic['location'])
     locations = cur.fetchall()
     if request.method=='GET':
 
-        cur.execute('SELECT * FROM mapping') 
+        cur.execute(QueryDic['mapping']) 
         mapping_summary = cur.fetchall()        
         log_summary = []
         for p_id in [x[0] for x in product]:
-            cur.execute("SELECT product_name FROM product WHERE product_id = ?", (p_id, ))
+            cur.execute(QueryDic["temp_prod_name"], (p_id, ))
             temp_prod_name = cur.fetchone()
+            #print(" temp_prod_name == ",temp_prod_name)
             
             for l_id in [x[0] for x in locations]:
-                cur.execute("SELECT location FROM location WHERE location_id = ?", (l_id,))
+                cur.execute(QueryDic['temp_loc_name'], (l_id,))
                 temp_loc_name = cur.fetchone()
                
-                cur.execute("""
-                SELECT SUM(log.prod_quantity)
-                FROM mapping log
-                WHERE log.product_id = ? AND log.to_loc = ?
-                """, (p_id, l_id))
+                cur.execute(QueryDic['sum_to_loc'], (p_id, l_id))
                 sum_to_loc = cur.fetchone()
                 
-                cur.execute("""
-                SELECT SUM(log.prod_quantity)
-                FROM mapping log
-                WHERE log.product_id = ? AND log.from_loc = ?
-                """, (p_id, l_id))
+                cur.execute(QueryDic['sum_from_loc'], (p_id, l_id))
                 sum_from_loc = cur.fetchone()
               
-                cur.execute("""
-                SELECT *
-                FROM mapping  """)
-               
-
                 if sum_from_loc[0] is None:
                     sum_from_loc = (0,)
                 if sum_to_loc[0] is None:
@@ -222,21 +239,18 @@ def managementInventory():
         to_loc = request.form['to_loc']
         quant_selected = int(request.form['quantity'])
 
+        print("  inside the post ")
+
         if from_loc in [None, '',' ']:
 
             try:
-                cur.execute("""
-                            select unallocted from product where product_name = ? """,(product_selected,))
+                cur.execute(QueryDic['select_unallocate'],(product_selected,))
                 prod_unallocation_count = cur.fetchone()
                 if prod_unallocation_count[0] >= quant_selected:
 
-                    cur.execute("""Insert into mapping(product_id , to_loc, prod_quantity,date_created)
-                            SELECT product.product_id, location.location_id, ? ,?
-                            FROM product, location 
-                            WHERE product.product_name == ? AND location.location == ?""",(quant_selected, datetime.utcnow(),product_selected, to_loc))
+                    cur.execute(QueryDic['from_loc_is_none_insert'],(quant_selected, datetime.utcnow(),product_selected, to_loc))
                     
-                    cur.execute(""" update product
-                            set unallocted = unallocted - ? where product_name == ? """,(quant_selected,product_selected ))    
+                    cur.execute(QueryDic['update_prod_from_loc_is_none'],(quant_selected,product_selected ))    
                 else:
                     msg=" No enough products are left to allocate."
 
@@ -244,53 +258,58 @@ def managementInventory():
             except sqlite3.Error as e:
                 msg= f"An error occurred: {e.args[0]}"
                 print("msg from  ==", msg)
-            
+            else:
+                msg = "Transaction added successfully==1"
+            conn.commit() 
 
         elif to_loc in [None, '',' ']:
-            cur.execute("select location_id from location where location =?",(from_loc,))
+            cur.execute(QueryDic['location_id'],(from_loc,))
             from_loc_selected= ''.join([str(x[0]) for x in cur.fetchall()])
-            cur.execute("select product_id from product where product_name =?",(product_selected,))
+            cur.execute(QueryDic['product_id'],(product_selected,))
             product_id_select = ''.join([str(x[0]) for x in cur.fetchall()])
-            cur.execute("select prod_quantity from mapping where product_id == ? AND to_loc == ? ",(product_id_select,from_loc_selected))
+            cur.execute(QueryDic['product_quantity'],(product_id_select,from_loc_selected))
             product_allocated_mapping_amount  = cur.fetchone()
             try:
                 if product_allocated_mapping_amount[0] not in [None,'',' '] and product_allocated_mapping_amount[0] >= quant_selected:  
-                    print("inside the condiotion")                      
-                    cur.execute("""Insert into mapping(product_id , from_loc, prod_quantity,date_created )
-                            SELECT product.product_id, location.location_id, ? ,?
-                            FROM product, location 
-                            WHERE product.product_name == ? AND location.location == ?""",(quant_selected,datetime.utcnow(), product_selected, from_loc))
+                    #print("inside the condiotion")                      
+                    cur.execute(QueryDic['to_loc_is_none_insert'],(quant_selected,datetime.utcnow(), product_selected, from_loc))
 
                     # cur.execute(""" update mapping set prod_quantity = prod_quantity - ? where product_id = ? AND to_loc = ?""",(quant_selected ,product_id_select,from_loc_selected))
-                    cur.execute(""" update product set unallocted = unallocted + ? where product_name == ? """,(quant_selected,product_selected ))
+                    cur.execute(QueryDic['update_prod_to_loc_is_none'],(quant_selected,product_selected ))
                 else:
                     msg="No enough quantity is present at this location."
                     print(msg)
             except sqlite3.Error as e:
                 msg= f"An error occurred: {e.args[0]}"
                 print("msg from to ==", msg)
+            else:
+                msg = "Transaction added successfully==2"
+            conn.commit() 
            
         elif from_loc not in [None, '',' '] and to_loc not in [None, '',' ']:
-            cur.execute("select location_id from location where location =?",(to_loc,))
+            cur.execute(QueryDic['location_id'],(to_loc,))
             to_loc= ''.join([str(x[0]) for x in cur.fetchall()])
-            cur.execute("select location_id from location where location =?",(from_loc,))
+            cur.execute(QueryDic['location_id'],(from_loc,))
             from_loc= ''.join([str(x[0]) for x in cur.fetchall()])
-            cur.execute("select product_id from product where product_name =?",(product_selected,))
+            cur.execute(QueryDic['product_id'],(product_selected,))
             product_selected_id = ''.join([str(x[0]) for x in cur.fetchall()])
-            cur.execute(""" select prod_quantity from mapping where product_id =?  and to_loc= ? """,[product_selected_id,from_loc])
+            cur.execute(QueryDic['product_quantity'],[product_selected_id,from_loc])
             total_amount =  cur.fetchone()
 
             try:
                 if total_amount[0] >= quant_selected:
-                    cur.execute(""" Insert into mapping(product_id, to_loc,from_loc, prod_quantity,date_created)values(?,?,?,?,?) """, 
+                    cur.execute(QueryDic['insert_into_mapping_both_loc_not_none'], 
                     ( product_selected_id,to_loc,from_loc,quant_selected, datetime.utcnow()))
 
-                    cur.execute(""" update mapping set prod_quantity = prod_quantity-? where product_id = ? and to_loc =?  """,(quant_selected,product_selected,from_loc))
+                    cur.execute(QueryDic['update_mapping'],(quant_selected,product_selected,from_loc))
                 else:
                     msg=" Movement can't be possible from warehouse to warehouse."    
             except sqlite3.Error as e:
                 msg= f"An error occurred: {e.args[0]}"
                 print("msg from both ==", msg)
+            else:
+                msg = "Transaction added successfully==3"
+            conn.commit() 
 
         elif from_loc  in [None, '',' '] and to_loc  in [None, '',' ']:
             msg="This fields required!!!!!!!!!!!"
@@ -310,12 +329,12 @@ def Summary():
     cur = conn.cursor()
     try:
 
-        cur.execute('Select * from location')
+        cur.execute(QueryDic['location'])
         location_info = cur.fetchall()
-        print("location--------", location_info)
-        cur.execute('select product_id , product_name, Quantity from product')
+        #print("location--------", location_info)
+        cur.execute(QueryDic['product'])
         product_info = cur.fetchall()
-        cur.execute('Select product_name , Quantity, unallocted from product')
+        cur.execute(QueryDic['unallocate'])
         unallocation_info = cur.fetchall()
 
 
