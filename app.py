@@ -1,5 +1,6 @@
 from  flask import Flask , render_template, request , redirect , flash
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.sql import exists
 import sqlite3
 from datetime import datetime
 app = Flask(__name__, template_folder='template')
@@ -7,6 +8,8 @@ app = Flask(__name__, template_folder='template')
 app.config['SQLALCHEMY_DATABASE_URI']= 'sqlite:///test.db'
 
 db = SQLAlchemy(app)
+
+
 
 QueryDic= {
     "temp_prod_name": "SELECT product_name FROM product WHERE product_id = ?",
@@ -16,24 +19,7 @@ QueryDic= {
     "mapping":"SELECT * FROM mapping",
     "sum_to_loc":"SELECT SUM(log.prod_quantity) FROM mapping log WHERE log.product_id = ? AND log.to_loc = ?",
     "sum_from_loc":"SELECT SUM(log.prod_quantity)  FROM mapping log WHERE log.product_id = ? AND log.from_loc = ?",
-    "select_unallocate":"select unallocted from product where product_name = ? ",
-    "from_loc_is_none_insert":'''Insert into mapping(product_id , to_loc, prod_quantity,date_created)
-                                  SELECT product.product_id, location.location_id, ? ,? FROM product, location 
-                                  WHERE product.product_name == ? AND location.location == ?''',
-    "update_prod_from_loc_is_none":'update product set unallocted = unallocted - ? where product_name == ?',
-    "location_id":"select location_id from location where location =?",
-    "product_id":"select product_id from product where product_name =?",
-    "product_quantity":"select prod_quantity from mapping where product_id == ? AND to_loc == ? ",
-    "to_loc_is_none_insert":'''Insert into mapping(product_id , from_loc, prod_quantity,date_created )
-                            SELECT product.product_id, location.location_id, ? ,?
-                            FROM product, location 
-                            WHERE product.product_name == ? AND location.location == ? ''',
-    "update_prod_to_loc_is_none":"update product set unallocted = unallocted + ? where product_name == ?",
-    "insert_into_mapping_both_loc_not_none":"Insert into mapping(product_id, to_loc,from_loc, prod_quantity,date_created)values(?,?,?,?,?) ",
-    "update_mapping":"update mapping set prod_quantity = prod_quantity-? where product_id = ? and to_loc =? ",
     "unallocate":"Select product_name , Quantity, unallocted from product"
-
-
 
 }
 
@@ -45,7 +31,7 @@ class Product(db.Model):
     
 
     def __repr__(self):
-        return '<product %r>' % self.Quantity
+        return str(self.unallocted)
 
 #creating data model for product table 
 
@@ -54,7 +40,7 @@ class Location(db.Model):
     location = db.Column(db.String, nullable=False)
 
     def __repr__(self):
-        return  self.location_id
+        return  str(self.location_id)
 
 # creating model for movement table
 class mapping(db.Model):
@@ -193,11 +179,47 @@ def updateLocation(id):
 ###############################################################################################################
 # for movement of product
 ###############################################################################################################
+def validate_item( item , from_loc , to_loc):
+    
+    prod = db.session.query(Product.query.filter(Product.product_id == item).exists()).scalar()
+    loc = db.session.query(Location.query.filter( Location.location_id == from_loc).exists()).scalar()
+    loc_2 = db.session.query(Location.query.filter(Location.location_id == to_loc).exists()).scalar()
+
+    if prod and (loc or loc_2):
+        return True
+    else:
+        return False
+
+def make_transaction( item,from_loc,to_loc, quantity):
+   
+    if validate_item(item,from_loc,to_loc):
+        new_trans= mapping(product_id = item,from_loc = from_loc,to_loc = to_loc, 
+                            prod_quantity = quantity,date_created = datetime.utcnow() ) 
+        
+        try:
+            db.session.add(new_trans)
+            db.session.commit()
+            db.session.flush()            
+        except:
+            return 'There is some issue in adding new transaction. '  
+        if from_loc  in [None]:          
+            db.session.query(Product).filter_by(product_id = item).update({"unallocted":Product.unallocted - quantity})
+        elif to_loc  in [None]:
+            db.session.query(Product).filter_by(product_id = item).update({"unallocted":Product.unallocted + quantity})
+        try:
+            db.session.commit()
+        except:
+            msg="can't able to modify"
+        return redirect('/management')
+    else:
+        return "Unable to make transaction" 
+
+
 @app.route("/management", methods=["GET","POST"])
 def managementInventory():
     msg = None
     mapping_summary = None
-    conn = sqlite3.connect('test.db',detect_types=sqlite3.PARSE_DECLTYPES)
+    conn = sqlite3.connect('test.db',detect_types = sqlite3.PARSE_DECLTYPES)
     cur = conn.cursor()
     cur.execute(QueryDic['product'])
     product = cur.fetchall()
@@ -211,7 +233,6 @@ def managementInventory():
         for p_id in [x[0] for x in product]:
             cur.execute(QueryDic["temp_prod_name"], (p_id, ))
             temp_prod_name = cur.fetchone()
-            #print(" temp_prod_name == ",temp_prod_name)
             
             for l_id in [x[0] for x in locations]:
                 cur.execute(QueryDic['temp_loc_name'], (l_id,))
@@ -227,94 +248,24 @@ def managementInventory():
                     sum_from_loc = (0,)
                 if sum_to_loc[0] is None:
                     sum_to_loc = (0,)
-                # print("individual values==")
-                # print([(temp_prod_name + temp_loc_name + (sum_to_loc[0],))])
-                # print([(temp_prod_name + temp_loc_name + (sum_from_loc[0],))])
+              
                 log_summary += [(temp_prod_name + temp_loc_name + (sum_to_loc[0] - sum_from_loc[0],))]
-        #print(" log_summary == ",log_summary)
+        
 
     elif request.method == 'POST'  and request.form['product'] not in [None,'',' '] and request.form['quantity'] not in [None,'',' '] :
-        product_selected= request.form['product']
-        from_loc = request.form['from_loc']
-        to_loc = request.form['to_loc']
+
         quant_selected = int(request.form['quantity'])
-
-        print("  inside the post ")
-
-        if from_loc in [None, '',' ']:
-
-            try:
-                cur.execute(QueryDic['select_unallocate'],(product_selected,))
-                prod_unallocation_count = cur.fetchone()
-                if prod_unallocation_count[0] >= quant_selected:
-
-                    cur.execute(QueryDic['from_loc_is_none_insert'],(quant_selected, datetime.utcnow(),product_selected, to_loc))
-                    
-                    cur.execute(QueryDic['update_prod_from_loc_is_none'],(quant_selected,product_selected ))    
-                else:
-                    msg=" No enough products are left to allocate."
-
-                
-            except sqlite3.Error as e:
-                msg= f"An error occurred: {e.args[0]}"
-                print("msg from  ==", msg)
-            else:
-                msg = "Transaction added successfully==1"
-            conn.commit() 
-
-        elif to_loc in [None, '',' ']:
-            cur.execute(QueryDic['location_id'],(from_loc,))
-            from_loc_selected= ''.join([str(x[0]) for x in cur.fetchall()])
-            cur.execute(QueryDic['product_id'],(product_selected,))
-            product_id_select = ''.join([str(x[0]) for x in cur.fetchall()])
-            cur.execute(QueryDic['product_quantity'],(product_id_select,from_loc_selected))
-            product_allocated_mapping_amount  = cur.fetchone()
-            try:
-                if product_allocated_mapping_amount[0] not in [None,'',' '] and product_allocated_mapping_amount[0] >= quant_selected:  
-                    #print("inside the condiotion")                      
-                    cur.execute(QueryDic['to_loc_is_none_insert'],(quant_selected,datetime.utcnow(), product_selected, from_loc))
-
-                    # cur.execute(""" update mapping set prod_quantity = prod_quantity - ? where product_id = ? AND to_loc = ?""",(quant_selected ,product_id_select,from_loc_selected))
-                    cur.execute(QueryDic['update_prod_to_loc_is_none'],(quant_selected,product_selected ))
-                else:
-                    msg="No enough quantity is present at this location."
-                    print(msg)
-            except sqlite3.Error as e:
-                msg= f"An error occurred: {e.args[0]}"
-                print("msg from to ==", msg)
-            else:
-                msg = "Transaction added successfully==2"
-            conn.commit() 
-           
-        elif from_loc not in [None, '',' '] and to_loc not in [None, '',' ']:
-            cur.execute(QueryDic['location_id'],(to_loc,))
-            to_loc= ''.join([str(x[0]) for x in cur.fetchall()])
-            cur.execute(QueryDic['location_id'],(from_loc,))
-            from_loc= ''.join([str(x[0]) for x in cur.fetchall()])
-            cur.execute(QueryDic['product_id'],(product_selected,))
-            product_selected_id = ''.join([str(x[0]) for x in cur.fetchall()])
-            cur.execute(QueryDic['product_quantity'],[product_selected_id,from_loc])
-            total_amount =  cur.fetchone()
-
-            try:
-                if total_amount[0] >= quant_selected:
-                    cur.execute(QueryDic['insert_into_mapping_both_loc_not_none'], 
-                    ( product_selected_id,to_loc,from_loc,quant_selected, datetime.utcnow()))
-
-                    cur.execute(QueryDic['update_mapping'],(quant_selected,product_selected,from_loc))
-                else:
-                    msg=" Movement can't be possible from warehouse to warehouse."    
-            except sqlite3.Error as e:
-                msg= f"An error occurred: {e.args[0]}"
-                print("msg from both ==", msg)
-            else:
-                msg = "Transaction added successfully==3"
-            conn.commit() 
-
-        elif from_loc  in [None, '',' '] and to_loc  in [None, '',' ']:
-            msg="This fields required!!!!!!!!!!!"
-    elif request.method == 'POST'  and (request.form['product']  in [None,'',' '] or request.form['quantity']  in [None,'',' '] ):    
-             msg="This fields required!!!!!!!!!!!"
+        prod =  Product.query.filter(Product.product_name == request.form['product'] ).first() 
+        if db.session.query(Location.query.filter(Location.location == request.form['from_loc']).exists()).scalar():
+            frm = Location.query.filter(Location.location == request.form['from_loc']).first().location_id
+        else:
+            frm = None
+        if db.session.query(Location.query.filter(Location.location == request.form['to_loc']).exists()).scalar():
+            to = Location.query.filter(Location.location == request.form['to_loc']).first().location_id
+        else:
+            to = None
+        #print(" values=== ", prod.product_id,frm,to,quant_selected)
+        msg = make_transaction(prod.product_id,frm,to,quant_selected)
 
     if msg:
         print("====",msg)
@@ -331,7 +282,6 @@ def Summary():
 
         cur.execute(QueryDic['location'])
         location_info = cur.fetchall()
-        #print("location--------", location_info)
         cur.execute(QueryDic['product'])
         product_info = cur.fetchall()
         cur.execute(QueryDic['unallocate'])
@@ -342,7 +292,6 @@ def Summary():
         msg = f"An error occurred: {e.args[0]}"
     if msg:
         print(msg)
-    #print(location_info)
     return render_template("summary.html", loc=location_info, prod= product_info, unallocate= unallocation_info)
 
             
